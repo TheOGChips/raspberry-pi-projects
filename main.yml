@@ -1,0 +1,62 @@
+# NOTE: Run using `ansible-playbook -K main.yml`
+---
+- name: Setting up the Pumpkin Pi
+  hosts: '{{ src_dir }}'
+  connection: ssh
+  # NOTE: The username should match between local and remote for my use case
+  remote_user: "{{ lookup('ansible.builtin.env', 'USER') }}"
+  become: yes
+  vars_files:
+    - debug-mode.yml
+    - pkgs-to-install.yml
+  vars:
+    - src_dir: pumpkin-pi
+
+  tasks:
+  - name: Upgrade current packages on machine
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.apt:
+      update_cache: yes
+      upgrade: safe
+
+  - name: Installing packages
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.apt:
+      name: "{{ pkgs_to_install }}"
+      state: present
+
+  - name: Creating {{ src_dir }} directory
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.file:
+      path: '{{ src_dir }}'
+      state: directory
+
+  - name: Creating {{ src_dir }} virtual environment
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.command:
+      cmd: python3 -m venv {{ src_dir }}/.{{ src_dir }}-venv --prompt {{ src_dir }}-venv
+
+  - name: Copying Pumpkin Pi driver module to Raspberry Pi
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.copy:
+      src: PumpkinPi.py
+      dest: '{{ src_dir }}'
+
+  - name: Copying Pumpkin Pi startup script to Raspberry Pi
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.copy:
+      src: '{{ src_dir }}.py'
+      dest: '{{ src_dir }}'
+
+  - name: Copying over Pumpkin Pi service
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.copy:
+      src: '{{ src_dir }}.service'
+      dest: /etc/systemd/system
+
+  - name: Enabling Pumpkin Pi service
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.systemd:
+      name: '{{ src_dir }}.service'
+      enabled: true
+      state: started
