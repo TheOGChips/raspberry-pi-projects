@@ -1,4 +1,3 @@
-# NOTE: Run using `ansible-playbook -K main.yml`
 ---
 - name: Setting up the Pumpkin Pi
   hosts: '{{ src_dir }}'
