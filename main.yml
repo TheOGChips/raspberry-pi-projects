@@ -1,0 +1,80 @@
+---
+- name: Setting up the Pumpkin Pi
+  hosts: raspberrypi
+  connection: ssh
+  # NOTE: The username should match between local and remote for my use case
+  remote_user: "{{ lookup('ansible.builtin.env', 'USER') }}"
+  become: yes
+  vars_files:
+    - debug-mode.yml
+    - pkgs-to-install.yml
+  vars:
+    - src_dir: showtimes
+    - venv_dir: '{{ src_dir }}/.{{ src_dir }}-venv'
+
+  tasks:
+  - name: Upgrade current packages on machine
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.apt:
+      update_cache: yes
+      upgrade: safe
+
+  - name: Installing packages
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.apt:
+      name: "{{ pkgs_to_install }}"
+      state: present
+
+  - name: Creating {{ src_dir }} directory
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.file:
+      path: '{{ src_dir }}'
+      state: directory
+
+  - name: Copying scripts to Raspberry Pi
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.copy:
+      src: '{{ item }}'
+      dest: '{{ src_dir }}'
+    loop:
+      - showtimes.py
+      - showtimes.sh
+      - cleanup.sh
+      - mailing-list.txt
+      - venv-reqs.txt
+
+  - name: Copying email scripts to Raspberry Pi
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.copy:
+      src: '{{ item }}'
+      dest: /home/{{ lookup('ansible.builtin.env', 'USER') }}/.local/bin/
+    loop:
+      - send-msg.py
+      - secrets.py
+
+  - name: Creating symbolic link to secrets.py in virtual environment
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.file:
+      src: /home/{{ lookup('ansible.builtin.env', 'USER') }}/.local/bin/secrets.py
+      dest: '{{ src_dir }}/secrets.py'
+      state: link
+
+  - name: Creating {{ src_dir }} virtual environment
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.command:
+      cmd: python3 -m venv {{ venv_dir }} --prompt {{ src_dir }}-venv
+
+  - name: Installing virtual environment Pip packages
+    check_mode: '{{ debug_mode }}'
+    ansible.builtin.command:
+      cmd: '{{ venv_dir }}/bin/pip install -r {{ src_dir }}/venv-reqs.txt'
+
+  - name: Updating Raspberry Pi crontab
+    check_mode: '{{ debug_mode }}'
+    become_user: "{{ lookup('ansible.builtin.env', 'USER') }}"
+    ansible.builtin.cron:
+      name: Check Showtimes
+      hour: 12
+      minute: 0
+      job: /home/{{ lookup('ansible.builtin.env', 'USER') }}/{{ src_dir }}/{{ src_dir }}.sh
+      state: present
