@@ -1,0 +1,5 @@
+---
+pkgs_to_install:
+  - python3-picamera2
+  - python3-pip
+  - python3-venv
